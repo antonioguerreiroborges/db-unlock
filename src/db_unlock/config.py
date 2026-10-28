@@ -10,6 +10,10 @@ from . import dpapi
 CONFIG_NAME = "config.ini"
 
 
+class PasswordDecryptError(Exception):
+    """The password was encrypted by another Windows user or machine."""
+
+
 def app_dir() -> Path:
     """Folder holding the exe (frozen) or the project root (source)."""
     if getattr(sys, "frozen", False):
@@ -34,7 +38,16 @@ class Config:
 
     @property
     def password(self) -> str:
-        return dpapi.unprotect(self.password_encrypted) if self.password_encrypted else ""
+        if not self.password_encrypted:
+            return ""
+        try:
+            return dpapi.unprotect(self.password_encrypted)
+        except OSError as exc:
+            raise PasswordDecryptError(
+                "Cannot decrypt the password in config.ini: it was encrypted by another "
+                "Windows user or machine. Run 'db-unlock setup' on this machine as this user, "
+                "or set 'password = <plain password>' in config.ini (it is encrypted on next run)."
+            ) from exc
 
     @password.setter
     def password(self, value: str) -> None:
@@ -49,12 +62,12 @@ def load(path: Path | None = None) -> Config:
     path = path or config_path()
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}. Run 'db-unlock setup' first.")
-    parser = configparser.ConfigParser()
+    parser = configparser.ConfigParser(interpolation=None)
     parser.read(path, encoding="utf-8")
     db = parser["database"] if parser.has_section("database") else {}
     run = parser["run"] if parser.has_section("run") else {}
     defaults = Config()
-    return Config(
+    config = Config(
         host=db.get("host", defaults.host),
         port=int(db.get("port", defaults.port)),
         user=db.get("user", defaults.user),
@@ -64,11 +77,18 @@ def load(path: Path | None = None) -> Config:
         retry_delay_seconds=int(run.get("retry_delay_seconds", defaults.retry_delay_seconds)),
         connect_timeout=int(run.get("connect_timeout", defaults.connect_timeout)),
     )
+    # A plain text password (handy to deploy the ini to other machines) is
+    # encrypted for the current Windows user and removed from the file.
+    plain_password = db.get("password", "")
+    if plain_password:
+        config.password = plain_password
+        save(config, path)
+    return config
 
 
 def save(config: Config, path: Path | None = None) -> Path:
     path = path or config_path()
-    parser = configparser.ConfigParser()
+    parser = configparser.ConfigParser(interpolation=None)
     parser["database"] = {
         "host": config.host,
         "port": str(config.port),

@@ -89,9 +89,26 @@ The password is encrypted with Windows DPAPI. Only the **same Windows user on
 the same machine** that ran `setup` can decrypt it. Consequences:
 
 - Run `setup` as the user who logs in and runs the tool.
-- Copying `config.ini` to another machine or user does not work: run `setup`
-  there again.
-- To change the password, run `setup` again (it cannot be typed into the ini).
+- A `config.ini` with `password_encrypted` copied from another machine or
+  user does **not** work (error "Cannot decrypt the password in config.ini").
+- To change the password, run `setup` again or use a plain text password (below).
+
+### Deploying a ready-made config.ini to other machines
+
+Instead of running `setup` on each machine, ship `config.ini` with the
+password in plain text and **without** `password_encrypted`:
+
+```ini
+[database]
+host = db.example.com
+port = 3306
+user = app_user
+password = my-secret-password
+```
+
+On the first run on the target machine, the tool encrypts the password for
+that Windows user, writes it to `password_encrypted` and removes the plain
+`password` line from the file.
 
 ### Required MySQL privileges
 

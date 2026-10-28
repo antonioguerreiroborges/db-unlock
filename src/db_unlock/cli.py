@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     command = args.command or "run"
     try:
         return COMMANDS[command](args)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, config.PasswordDecryptError) as exc:
         log.error("%s", exc)
     except pymysql.MySQLError as exc:
         log.error("MySQL error: %s", exc)
