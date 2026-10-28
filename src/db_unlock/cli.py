@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 
 import pymysql
 
-from . import __version__, config, killer
+from . import __version__, config, killer, startup
 
 LOG_NAME = "db-unlock.log"
 
@@ -93,6 +93,20 @@ def cmd_run(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_install_startup(_args: argparse.Namespace) -> int:
+    path = startup.install()
+    log.info("Startup shortcut created: %s", path)
+    return 0
+
+
+def cmd_uninstall_startup(_args: argparse.Namespace) -> int:
+    if startup.uninstall():
+        log.info("Startup shortcut removed: %s", startup.shortcut_path())
+    else:
+        log.info("No startup shortcut found at %s", startup.shortcut_path())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="db-unlock",
@@ -103,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("setup", help="interactively configure the database connection")
     sub.add_parser("test", help="connect and list connections that would be killed (dry run)")
     sub.add_parser("run", help="kill the connections (default when no command is given)")
+    sub.add_parser("install-startup", help="run automatically at Windows logon")
+    sub.add_parser("uninstall-startup", help="stop running at Windows logon")
     return parser
 
 
@@ -110,6 +126,8 @@ COMMANDS = {
     "setup": cmd_setup,
     "test": cmd_test,
     "run": cmd_run,
+    "install-startup": cmd_install_startup,
+    "uninstall-startup": cmd_uninstall_startup,
 }
 
 
