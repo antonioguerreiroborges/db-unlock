@@ -7,3 +7,4 @@ dist/
 config.ini
 *.log
 *.log.*
+last-lock.txt

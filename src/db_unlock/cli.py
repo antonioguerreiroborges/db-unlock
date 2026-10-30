@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 
 import pymysql
 
-from . import __version__, config, killer, startup
+from . import __version__, config, killer, lockstamp, scheduler
 
 LOG_NAME = "db-unlock.log"
 
@@ -93,17 +93,40 @@ def cmd_run(_args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_install_startup(_args: argparse.Namespace) -> int:
-    path = startup.install()
-    log.info("Startup shortcut created: %s", path)
+def cmd_on_lock(_args: argparse.Namespace) -> int:
+    lockstamp.write()
+    log.info("Session locked: time recorded")
     return 0
 
 
-def cmd_uninstall_startup(_args: argparse.Namespace) -> int:
-    if startup.uninstall():
-        log.info("Startup shortcut removed: %s", startup.shortcut_path())
-    else:
-        log.info("No startup shortcut found at %s", startup.shortcut_path())
+def cmd_on_unlock(args: argparse.Namespace) -> int:
+    cfg = config.load()
+    locked_for = lockstamp.locked_for()
+    # Each lock records a new time; clearing it avoids reusing a stale one.
+    lockstamp.clear()
+    if locked_for is None:
+        log.info("Session unlocked: skipped, no lock time recorded")
+        return 0
+    hours = locked_for.total_seconds() / 3600
+    if hours < cfg.min_locked_hours:
+        log.info("Session unlocked: skipped, locked for %.2fh < %gh", hours, cfg.min_locked_hours)
+        return 0
+    log.info("Session unlocked after %.2fh locked (>= %gh)", hours, cfg.min_locked_hours)
+    return cmd_run(args)
+
+
+def cmd_install(_args: argparse.Namespace) -> int:
+    for name in scheduler.install():
+        log.info("Scheduled task created: %s", name)
+    return 0
+
+
+def cmd_uninstall(_args: argparse.Namespace) -> int:
+    removed = scheduler.uninstall()
+    for item in removed:
+        log.info("Removed: %s", item)
+    if not removed:
+        log.info("Nothing to remove")
     return 0
 
 
@@ -117,8 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("setup", help="interactively configure the database connection")
     sub.add_parser("test", help="connect and list connections that would be killed (dry run)")
     sub.add_parser("run", help="kill the connections (default when no command is given)")
-    sub.add_parser("install-startup", help="run automatically at Windows logon")
-    sub.add_parser("uninstall-startup", help="stop running at Windows logon")
+    sub.add_parser("install", aliases=["install-startup"],
+                   help="run automatically when the session is unlocked after a long lock")
+    sub.add_parser("uninstall", aliases=["uninstall-startup"], help="remove the scheduled tasks")
+    sub.add_parser("on-lock", help="record the lock time (called by the scheduled task)")
+    sub.add_parser("on-unlock", help="run if the session was locked long enough (called by the scheduled task)")
     return parser
 
 
@@ -126,8 +152,12 @@ COMMANDS = {
     "setup": cmd_setup,
     "test": cmd_test,
     "run": cmd_run,
-    "install-startup": cmd_install_startup,
-    "uninstall-startup": cmd_uninstall_startup,
+    "install": cmd_install,
+    "install-startup": cmd_install,
+    "uninstall": cmd_uninstall,
+    "uninstall-startup": cmd_uninstall,
+    "on-lock": cmd_on_lock,
+    "on-unlock": cmd_on_unlock,
 }
 
 

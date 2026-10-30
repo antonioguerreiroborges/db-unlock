@@ -10,6 +10,10 @@ def write() -> None:
     lock_stamp_path().write_text(f"{time.time():.0f}\n", encoding="utf-8")
 
 
+def clear() -> None:
+    lock_stamp_path().unlink(missing_ok=True)
+
+
 def locked_for() -> timedelta | None:
     """Time since the last recorded lock, or None if no valid lock was recorded."""
     try:
