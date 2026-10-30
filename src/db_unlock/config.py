@@ -8,6 +8,7 @@ from pathlib import Path
 from . import dpapi
 
 CONFIG_NAME = "config.ini"
+LOCK_STAMP_NAME = "last-lock.txt"
 
 
 class PasswordDecryptError(Exception):
@@ -25,6 +26,10 @@ def config_path() -> Path:
     return app_dir() / CONFIG_NAME
 
 
+def lock_stamp_path() -> Path:
+    return app_dir() / LOCK_STAMP_NAME
+
+
 @dataclass
 class Config:
     host: str = "localhost"
@@ -35,6 +40,7 @@ class Config:
     retries: int = 5
     retry_delay_seconds: int = 10
     connect_timeout: int = 10
+    min_locked_hours: float = 6.0
 
     @property
     def password(self) -> str:
@@ -76,6 +82,7 @@ def load(path: Path | None = None) -> Config:
         retries=int(run.get("retries", defaults.retries)),
         retry_delay_seconds=int(run.get("retry_delay_seconds", defaults.retry_delay_seconds)),
         connect_timeout=int(run.get("connect_timeout", defaults.connect_timeout)),
+        min_locked_hours=float(run.get("min_locked_hours", defaults.min_locked_hours)),
     )
     # A plain text password (handy to deploy the ini to other machines) is
     # encrypted for the current Windows user and removed from the file.
@@ -100,6 +107,7 @@ def save(config: Config, path: Path | None = None) -> Path:
         "retries": str(config.retries),
         "retry_delay_seconds": str(config.retry_delay_seconds),
         "connect_timeout": str(config.connect_timeout),
+        "min_locked_hours": str(config.min_locked_hours),
     }
     with path.open("w", encoding="utf-8") as fh:
         parser.write(fh)
